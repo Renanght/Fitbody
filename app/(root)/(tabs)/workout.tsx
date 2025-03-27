@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Image, ActivityIndicator, Alert, TouchableOpacity } from "react-native";
+import { View, Text, Image, ActivityIndicator, Alert, TouchableOpacity, SafeAreaView } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import axios from "axios";
 import Swiper from "react-native-swiper";
 import * as SecureStore from "expo-secure-store";
 import { ScrollView } from "react-native-gesture-handler";
 import { useRouter } from "expo-router";
+import icons from "@/constants/icons";
 
 const API_URL = "http://10.19.4.2:8001/exercises";
 
@@ -19,35 +20,19 @@ const Workout = () => {
     const fetchExercises = async () => {
       try {
         const token = await SecureStore.getItemAsync("userToken");
-        console.log("🔑 Token récupéré :", token);
-
-        if (!token) {
-          throw new Error("Aucun token JWT trouvé !");
-        }
+        if (!token) throw new Error("Aucun token JWT trouvé !");
 
         const response = await axios.get(API_URL, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
         });
 
-        console.log("✅ Réponse API :", response.data);
-
         const exerciseData = response.data.exercises || response.data;
-        
-        if (!exerciseData || exerciseData.length === 0) {
-          throw new Error("Aucun exercice trouvé");
-        }
+        if (!exerciseData?.length) throw new Error("Aucun exercice trouvé");
 
         setExercises(exerciseData);
       } catch (error) {
-        console.error("❌ Erreur API :", error.response?.data || error.message);
-        
-        Alert.alert(
-          "Erreur de chargement",
-          error.response?.data?.detail || error.message || "Erreur inconnue"
-        );
-        
+        console.error("Erreur API:", error);
+        Alert.alert("Erreur", error.response?.data?.detail || error.message);
         setError(error);
       } finally {
         setLoading(false);
@@ -59,24 +44,23 @@ const Workout = () => {
 
   if (loading) {
     return (
-      <GestureHandlerRootView className="flex-1 justify-center items-center bg-primary-300">
+      <SafeAreaView className="flex-1 justify-center items-center bg-primary-300">
         <ActivityIndicator size="large" color="#fff" />
-        <Text className="text-white mt-4">Chargement des exercices...</Text>
-      </GestureHandlerRootView>
+        <Text className="text-white mt-4">Chargement...</Text>
+      </SafeAreaView>
     );
   }
 
   if (error) {
     return (
-      <GestureHandlerRootView className="flex-1 justify-center items-center bg-primary-300 p-4">
+      <SafeAreaView className="flex-1 justify-center items-center bg-primary-300 p-4">
         <Text className="text-white text-center text-lg">
-          Impossible de charger les exercices. Vérifiez votre connexion.
+          Impossible de charger les exercices
         </Text>
-      </GestureHandlerRootView>
+      </SafeAreaView>
     );
   }
 
-  // Regrouper les exercices par groupe musculaire
   const categories = exercises.reduce((acc, exo) => {
     acc[exo.muscle_group] = acc[exo.muscle_group] || [];
     acc[exo.muscle_group].push(exo);
@@ -84,51 +68,103 @@ const Workout = () => {
   }, {});
 
   return (
-    <GestureHandlerRootView className="flex-1 bg-primary-300">
-      <ScrollView className="px-4 pt-4">
-        <Text className="text-white text-2xl font-bold mb-4">💪 Exercices</Text>
-
-        {Object.keys(categories).map((categorie, index) => (
-          <View key={categorie} className={`mb-4 ${index === Object.keys(categories).length - 1 ? 'mb-0' : ''}`}>
-            <Text className="text-white text-xl font-semibold mb-2">{categorie}</Text>
-            <Swiper
-              style={{ height: 350 }}
-              showsPagination={false}
-              loop={true}
-            >
-              {categories[categorie].map((item) => (
-                <TouchableOpacity 
-                  key={item.exercise_id} 
-                  className="bg-gray-200 p-4 rounded-xl shadow-lg mx-2 items-center"
-                  onPress={() => router.push({
-                    pathname: '/(sport)/ExerciceDetails',
-                    params: {
-                      imageUrl: item.image,
-                      title: item.name
-                    }
-                  })}
-                  activeOpacity={0.7}
-                >
-                  <Image
-                    source={{ uri: item.image }}
-                    className="w-full h-40 rounded-lg"
-                    resizeMode="cover"
-                  />
-                  <Text className="text-gray-800 text-lg mt-2 font-semibold text-center">
-                    {item.name}
-                  </Text>
-                  <Text className="text-gray-600 text-sm text-center mt-1">
-                    {item.difficulty} | {item.muscle_group}
-                  </Text>
-                  <Text className="text-gray-500 text-xs text-center mt-2">
-                    {item.description}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </Swiper>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView className="flex-1 bg-primary-300">
+        <ScrollView 
+          className="px-4" 
+          contentContainerStyle={{ paddingBottom: 20 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View className="flex-row justify-between items-center mt-4 mb-4">
+            <Text className="text-primary-200 font-bold text-3xl">Exercices</Text>
+            <Image source={icons.search} className="w-6 h-6" />
           </View>
-        ))}
-      </ScrollView>
+
+          {/* Favoris */}
+          <TouchableOpacity 
+            className="flex-row items-center justify-between mb-6 px-4 py-3 bg-white/5 rounded-lg border border-white/10"
+            onPress={() => router.push('/(sport)/ExercicesFavoris')}
+          >
+            <Text className="text-lg font-medium text-white">Favoris</Text>
+            <Image source={icons.stars} className="size-5" />
+          </TouchableOpacity>
+
+          {/* Catégories d'exercices */}
+          {Object.entries(categories).map(([categorie, items]) => (
+            <View key={categorie} className="mb-8">
+              {/* Titre de catégorie */}
+              <Text className="text-white text-xl font-bold mb-3">
+                {categorie}
+              </Text>
+              
+              {/* Swiper des exercices */}
+              <Swiper
+                height={280}
+                showsPagination={false}
+                loop={false}
+                containerStyle={{ marginHorizontal: -10 }}
+              >
+                {items.map((item) => (
+                  <TouchableOpacity
+                    key={item.exercise_id}
+                    className="bg-white mx-2 rounded-lg overflow-hidden"
+                    style={{ height: 270 }}
+                    onPress={() => router.push({
+                      pathname: '/(sport)/ExerciceDetails',
+                      params: { 
+                        imageUrl: item.image,
+                        title: item.name,
+                        description: item.description,
+                        difficulty: item.difficulty,
+                        muscleGroup: item.muscle_group
+                      }
+                    })}
+                  >
+                    {/* Image de l'exercice */}
+                    <Image
+                      source={{ uri: item.image }}
+                      className="w-full h-40"
+                      resizeMode="cover"
+                    />
+                    
+                    {/* Contenu texte */}
+                    <View className="p-4">
+                      {/* Titre de l'exercice */}
+                      <Text className="text-gray-900 font-bold text-lg mb-1">
+                        {item.name}
+                      </Text>
+                      
+                      {/* Métadonnées */}
+                      <View className="flex-row items-center mb-2">
+                        <Text className="text-primary-300 text-sm font-medium">
+                          {item.difficulty}
+                        </Text>
+                        <Text className="text-gray-300 mx-2">|</Text>
+                        <Text className="text-gray-600 text-sm">
+                          {item.muscle_group}
+                        </Text>
+                      </View>
+                      
+                      {/* Description */}
+                      <Text className="text-gray-500 text-sm mb-3" numberOfLines={2}>
+                        {item.description}
+                      </Text>
+                      
+                      {/* Séparateur et CTA */}
+                      <View className="border-t border-gray-200 pt-3">
+                        <Text className="text-primary-300 text-xs font-medium">
+                          Voir les détails →
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </Swiper>
+            </View>
+          ))}
+        </ScrollView>
+      </SafeAreaView>
     </GestureHandlerRootView>
   );
 };
