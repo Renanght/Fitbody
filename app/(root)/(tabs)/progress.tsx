@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, Image, TouchableOpacity, ScrollView, Alert } from "react-native";
 import { LineChart, BarChart } from "react-native-chart-kit";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -57,8 +57,22 @@ const Progress = () => {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // Formatage du programme pour l'affichage
+  const formatProgramContent = (program) => {
+    return program
+      .replace(/\$/g, '\n• ') // Remplace les $ par des puces
+      .replace(/\\n/g, '\n')   // Remplace les \n par des sauts de ligne
+      .trim();
+  };
+
+  // Extraction du titre (première ligne avant le premier $)
+  const getProgramTitle = (program) => {
+    return program.split('$')[0].trim() || "Programme sans titre";
+  };
+
   // Fetch training programs
-  const fetchProgrammes = async () => {
+  const fetchProgrammes = useCallback(async () => {
+    console.log("Fetching programmes...");
     try {
       setLoading(true);
       const token = await SecureStore.getItemAsync('userToken');
@@ -77,21 +91,30 @@ const Progress = () => {
       });
       
       if (response.ok) {
-        const data = await response.json();
-        setProgrammes(data);
+        const result = await response.json();
+        console.log("API Response:", result);
+        
+        if (result.programmes && Array.isArray(result.programmes)) {
+          setProgrammes(result.programmes);
+        } else {
+          console.error("Format de réponse inattendu:", result);
+          setProgrammes([]);
+        }
       } else {
         console.error("Error fetching programmes:", response.status);
         Alert.alert("Erreur", "Impossible de récupérer vos programmes");
+        setProgrammes([]);
       }
     } catch (error) {
       console.error("Error fetching programmes:", error);
       Alert.alert("Erreur", "Une erreur est survenue lors de la récupération de vos programmes");
+      setProgrammes([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Create new program and navigate
+  // Create new program
   const handleNewProgram = async () => {
     try {
       const token = await SecureStore.getItemAsync('userToken');
@@ -101,22 +124,17 @@ const Progress = () => {
         return;
       }
       
-      // Send the POST request first
       const response = await fetch("https://sport-coach-api.lab.rioc.fr/ProgrammePerso", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          // Add your payload here if needed
-        }),
+        body: JSON.stringify({}),
       });
       
       if (response.ok) {
-        // Success alert instead of navigation
         Alert.alert("Succès", "Programme créé avec succès");
-        // Refresh the programs list
         fetchProgrammes();
       } else {
         console.error("Error creating program:", response.status);
@@ -128,12 +146,12 @@ const Progress = () => {
     }
   };
 
-  // Load programs when segment changes to "mesEntrainements"
+  // Load programs when segment changes
   useEffect(() => {
     if (selectedSegment === "mesEntrainements") {
       fetchProgrammes();
     }
-  }, [selectedSegment]);
+  }, [selectedSegment, fetchProgrammes]);
 
   return (
     <SafeAreaView className="bg-primary-300 flex-1">
@@ -196,7 +214,7 @@ const Progress = () => {
               <Image source={icons.add} className="size-5" />
             </TouchableOpacity>
             
-            <Text className="text-primary-200 text-lg mb-4">Mes Entraînements</Text>
+            <Text className="text-primary-200 text-lg mb-4 px-4">Mes Entraînements</Text>
             
             {loading ? (
               <Text className="text-white text-center my-4">Chargement...</Text>
@@ -204,13 +222,31 @@ const Progress = () => {
               programmes.map((programme, index) => (
                 <TouchableOpacity
                   key={`program-${programme.id || index}`}
-                  onPress={() => router.push(`/Programme/${programme.id}`)}
-                  className="flex flex-row items-center justify-between mx-4 mb-4 px-4 py-3 bg-white/5 rounded-lg border border-white/10"
+                  onPress={() => router.push({
+                    pathname: "/ProgrammeDetails",
+                    params: {
+                      id: programme.id,
+                      title: getProgramTitle(programme.program),
+                      content: formatProgramContent(programme.program),
+                      date: programme.created_at
+                    }
+                  })}
+                  className="bg-white/5 rounded-lg shadow-sm mb-4 p-4 mx-4 border border-white/10"
                 >
-                  <View className="flex flex-row items-center gap-3">
-                    <Text className="text-lg font-rubik-medium text-white">{programme.name || `Programme ${index + 1}`}</Text>
+                  <View className="flex-row justify-between items-center">
+                    <View className="flex-1">
+                      <Text className="text-lg text-[#B3A0FF] font-bold">
+                        {getProgramTitle(programme.program)}
+                      </Text>
+                      <Text className="text-gray-400 text-sm mt-1">
+                        Créé le: {new Date(programme.created_at).toLocaleDateString()}
+                      </Text>
+                      <Text numberOfLines={2} className="text-gray-300 text-sm mt-2">
+                        {formatProgramContent(programme.program).split('\n')[0]}
+                      </Text>
+                    </View>
+                    <Image source={icons.rightArrowGrey} className="size-5" />
                   </View>
-                  <Image source={icons.rightArrowGrey} className="size-5" />
                 </TouchableOpacity>
               ))
             ) : (
