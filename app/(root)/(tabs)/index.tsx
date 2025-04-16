@@ -126,7 +126,7 @@ export default function Index() {
   const [activityDays, setActivityDays] = useState<DayAbbreviation[]>([]);
   const [stats, setStats] = useState<ActivityStats>({
     heartRate: 85,
-    steps: 7500,
+    steps: 4200,
     calories: 420,
     distance: 5.2,
     activeMinutes: 45,
